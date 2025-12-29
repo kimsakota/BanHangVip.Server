@@ -6,10 +6,15 @@ namespace BanHangVip.Backend.Models
     public class HistoryItem
     {
         [Key]
-        public string Id { get; set; } = Guid.NewGuid().ToString(); // Tự sinh ID nếu client không gửi
+        public int Id { get; set; } 
 
-        public string Type { get; set; } // "INTAKE", "DELIVERY", "PAYMENT"
-        public string ProductName { get; set; } //
+        public string? Type { get; set; } // "INTAKE", "DELIVERY", "PAYMENT"
+
+        public int? ProductId { get; set; } //
+        [ForeignKey("ProductId")]
+        public Product? Product { get; set; } //
+
+        public string? ProductName { get; set; } //
         public double Weight { get; set; } //
 
         [Column(TypeName = "decimal(18,2)")]

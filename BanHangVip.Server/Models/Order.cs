@@ -8,8 +8,12 @@ namespace BanHangVip.Backend.Models
     public class Order
     {
         [Key]
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public string CustomerName { get; set; }
+        public int Id { get; set; }
+
+        public int CustomerId { get; set; }
+
+        [ForeignKey("CustomerId")]
+        public Customer? Customer { get; set; }
         public OrderStatus Status { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsPaid { get; set; }

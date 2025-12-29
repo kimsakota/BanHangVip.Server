@@ -10,8 +10,8 @@ namespace BanHangVip.Backend.Models
         [Key]
         public int Id { get; set; } // PK nội bộ cho DB
 
-        public string ProductId { get; set; }
-        public string ProductName { get; set; }
+        public int ProductId { get; set; }
+        public string? ProductName { get; set; }
 
         public double Weight { get; set; }
 
@@ -22,8 +22,9 @@ namespace BanHangVip.Backend.Models
         public decimal Total => (decimal)Weight * Price;
 
         // Foreign Key để link với Order
-        public string OrderId { get; set; }
+        public int OrderId { get; set; }
+
         [JsonIgnore] // Tránh vòng lặp khi serialize JSON
-        public Order Order { get; set; }
+        public Order? Order { get; set; }
     }
 }

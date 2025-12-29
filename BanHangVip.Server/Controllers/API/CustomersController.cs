@@ -24,19 +24,48 @@ namespace BanHangVip.Server.Controllers.API
             return await _context.Customers.ToListAsync();
         }
 
+        // GET: api/Customers/{id}
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Customer>> GetCustomer(int id)
+        {
+            var customer = await _context.Customers.FindAsync(id);
+            if (customer == null) return NotFound();
+            return customer;
+        }
+
         // POST: api/Customers
         [HttpPost]
         public async Task<ActionResult<Customer>> AddCustomer(Customer customer)
         {
-            if (string.IsNullOrEmpty(customer.Id)) customer.Id = Guid.NewGuid().ToString();
             _context.Customers.Add(customer);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetCustomers), new { id = customer.Id }, customer);
+            return CreatedAtAction(nameof(GetCustomer), new { id = customer.Id }, customer);
+        }
+
+        // PUT: api/Customers/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCustomer(int id, Customer customer)
+        {
+            if (id != customer.Id) return BadRequest("ID không khớp");
+
+            _context.Entry(customer).State = EntityState.Modified;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Customers.Any(e => e.Id == id)) return NotFound();
+                else throw;
+            }
+
+            return NoContent();
         }
 
         // DELETE: api/Customers/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteCustomer(string id)
+        public async Task<IActionResult> DeleteCustomer(int id)
         {
             var customer = await _context.Customers.FindAsync(id);
             if (customer == null) return NotFound();

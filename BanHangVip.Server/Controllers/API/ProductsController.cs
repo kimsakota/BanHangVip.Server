@@ -24,19 +24,27 @@ namespace BanHangVip.Server.Controllers.API
             return await _context.Products.ToListAsync();
         }
 
+        // GET: api/Products/{id}
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Product>> GetProduct(int id)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product == null) return NotFound();
+            return product;
+        }
+
         // POST: api/Products
         [HttpPost]
         public async Task<ActionResult<Product>> CreateProduct(Product product)
         {
-            if (string.IsNullOrEmpty(product.Id)) product.Id = Guid.NewGuid().ToString();
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetProducts), new { id = product.Id }, product);
+            return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
         }
 
         // PUT: api/Products/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProduct(string id, Product product)
+        public async Task<IActionResult> UpdateProduct(int id, Product product)
         {
             if (id != product.Id) return BadRequest("ID không khớp");
 
@@ -57,7 +65,7 @@ namespace BanHangVip.Server.Controllers.API
 
         // DELETE: api/Products/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteProduct(string id)
+        public async Task<IActionResult> DeleteProduct(int id)
         {
             var product = await _context.Products.FindAsync(id);
             if (product == null) return NotFound();

@@ -25,8 +25,22 @@ namespace BanHangVip.Server.Controllers.API
         {
             return await _context.Orders
                 .Include(o => o.Items)
+                .Include(o => o.Customer) // ⭐ Include Customer
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
+        }
+
+        // GET: api/Orders/{id}
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Order>> GetOrder(int id)
+        {
+            var order = await _context.Orders
+                .Include(o => o.Items)
+                .Include(o => o.Customer) // ⭐ Include Customer
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null) return NotFound();
+            return order;
         }
 
         // GET: api/Orders/Pending
@@ -35,6 +49,7 @@ namespace BanHangVip.Server.Controllers.API
         {
             return await _context.Orders
                 .Include(o => o.Items)
+                .Include(o => o.Customer)
                 .Where(o => o.Status == OrderStatus.Pending)
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
@@ -46,6 +61,7 @@ namespace BanHangVip.Server.Controllers.API
         {
             return await _context.Orders
                 .Include(o => o.Items)
+                .Include(o => o.Customer)
                 .Where(o => o.Status == OrderStatus.Delivered)
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
@@ -57,6 +73,7 @@ namespace BanHangVip.Server.Controllers.API
         {
             return await _context.Orders
                 .Include(o => o.Items)
+                .Include(o => o.Customer)
                 .Where(o => o.Status == OrderStatus.Delivered && !o.IsPaid)
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
@@ -68,7 +85,11 @@ namespace BanHangVip.Server.Controllers.API
         [HttpPost]
         public async Task<ActionResult<Order>> AddOrder(Order order)
         {
-            if (string.IsNullOrEmpty(order.Id)) order.Id = Guid.NewGuid().ToString();
+            // ⭐ Kiểm tra CustomerId có tồn tại không
+            var customerExists = await _context.Customers.AnyAsync(c => c.Id == order.CustomerId);
+            if (!customerExists)
+                return BadRequest($"Không tìm thấy khách hàng với ID: {order.CustomerId}");
+
             order.CreatedAt = DateTime.Now;
             order.Status = OrderStatus.Pending;
             order.IsPaid = false;
@@ -84,12 +105,15 @@ namespace BanHangVip.Server.Controllers.API
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetOrders), new { id = order.Id }, order);
+            // Load lại Customer để trả về đầy đủ thông tin
+            await _context.Entry(order).Reference(o => o.Customer).LoadAsync();
+
+            return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
         }
 
         // PUT: api/Orders/{id}
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateOrder(string id, Order order)
+        public async Task<IActionResult> UpdateOrder(int id, Order order)
         {
             if (id != order.Id) return BadRequest();
 
@@ -108,13 +132,22 @@ namespace BanHangVip.Server.Controllers.API
                 }
             }
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Orders.Any(e => e.Id == id)) return NotFound();
+                else throw;
+            }
+
             return NoContent();
         }
 
         // DELETE: api/Orders/{id}
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteOrder(string id)
+        public async Task<IActionResult> DeleteOrder(int id)
         {
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return NotFound();
@@ -128,7 +161,7 @@ namespace BanHangVip.Server.Controllers.API
 
         // POST: api/Orders/Deliver/{id}
         [HttpPost("Deliver/{id}")]
-        public async Task<IActionResult> DeliverOrder(string id)
+        public async Task<IActionResult> DeliverOrder(int id)
         {
             var order = await _context.Orders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return NotFound("Không tìm thấy đơn hàng");
@@ -146,8 +179,8 @@ namespace BanHangVip.Server.Controllers.API
                 {
                     _context.HistoryItems.Add(new HistoryItem
                     {
-                        Id = $"DEL-{DateTime.Now.Ticks}-{item.ProductId}",
                         Type = "DELIVERY",
+                        ProductId = item.ProductId, // ⭐ Lưu ProductId
                         ProductName = item.ProductName,
                         Weight = item.Weight,
                         Price = item.Price,
@@ -160,19 +193,25 @@ namespace BanHangVip.Server.Controllers.API
             return Ok(order);
         }
 
-        // POST: api/Orders/ProcessPayment
-        [HttpPost("ProcessPayment")]
-        public async Task<IActionResult> ProcessPayment([FromBody] string customerName)
+        // POST: api/Orders/ProcessPayment/{customerId}
+        [HttpPost("ProcessPayment/{customerId}")]
+        public async Task<IActionResult> ProcessPayment(int customerId)
         {
+            // ⭐ Kiểm tra Customer có tồn tại không
+            var customer = await _context.Customers.FindAsync(customerId);
+            if (customer == null)
+                return NotFound($"Không tìm thấy khách hàng với ID: {customerId}");
+
             var unpaidOrders = await _context.Orders
                 .Include(o => o.Items)
-                .Where(o => o.CustomerName == customerName
+                .Include(o => o.Customer)
+                .Where(o => o.CustomerId == customerId
                             && o.Status == OrderStatus.Delivered
                             && !o.IsPaid)
                 .ToListAsync();
 
             if (!unpaidOrders.Any())
-                return NotFound($"Không tìm thấy đơn nợ nào của khách: {customerName}");
+                return NotFound($"Không tìm thấy đơn nợ nào của khách: {customer.Name}");
 
             var paymentTime = DateTime.Now;
 
@@ -189,8 +228,8 @@ namespace BanHangVip.Server.Controllers.API
                     {
                         _context.HistoryItems.Add(new HistoryItem
                         {
-                            Id = $"PAY-{DateTime.Now.Ticks}-{item.ProductId}",
                             Type = "PAYMENT",
+                            ProductId = item.ProductId, // ⭐ Lưu ProductId
                             ProductName = item.ProductName,
                             Weight = item.Weight,
                             Price = item.Price,
@@ -203,8 +242,9 @@ namespace BanHangVip.Server.Controllers.API
             await _context.SaveChangesAsync();
             return Ok(new
             {
-                Message = $"Đã thanh toán {unpaidOrders.Count} đơn hàng cho {customerName}",
-                ProcessedCount = unpaidOrders.Count
+                Message = $"Đã thanh toán {unpaidOrders.Count} đơn hàng cho {customer.Name}",
+                ProcessedCount = unpaidOrders.Count,
+                CustomerName = customer.Name
             });
         }
     }
