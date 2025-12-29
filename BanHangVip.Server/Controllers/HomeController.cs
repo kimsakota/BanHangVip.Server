@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using BanHangVip.Server.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,6 +23,19 @@ namespace BanHangVip.Server.Controllers
             return View();
         }
 
+        // [QUAN TRỌNG] Hàm này bị thiếu, bạn cần thêm vào để chạy trang Đơn Đang Đợi
+        public IActionResult Pending()
+        {
+            return View();
+        }
+
+        // [QUAN TRỌNG] Hàm này dành cho trang Thống kê (nếu bạn đã thêm menu Thống kê)
+        public IActionResult Statistics()
+        {
+            return View();
+        }
+
+        // Action cũ của bạn (có thể giữ lại hoặc xóa nếu không dùng)
         public IActionResult Order()
         {
             return View();

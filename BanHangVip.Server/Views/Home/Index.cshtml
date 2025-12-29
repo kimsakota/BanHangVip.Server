@@ -1,5 +1,8 @@
-﻿@{
+﻿@using Microsoft.AspNetCore.Http
+@{
     ViewData["Title"] = "Đặt Hàng Hải Sản";
+    // Lấy ID khách hàng trực tiếp từ Session đã đăng nhập
+    var currentCustomerId = Context.Session.GetInt32("CustomerId") ?? 0;
 }
 
 <style>
@@ -95,11 +98,8 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h5 class="fw-bold mb-0">Tạo Đơn Yêu Cầu</h5>
-            <small class="text-muted">Chọn khách & món ăn</small>
+            <small class="text-muted">Chọn món ăn bên dưới</small>
         </div>
-        <select id="customerSelect" class="form-select w-auto fw-bold border-0 bg-white shadow-sm" style="border-radius: 20px;">
-            <option value="">Đang tải...</option>
-        </select>
     </div>
 
     <div id="productList" class="row row-cols-2 row-cols-md-4 g-3"></div>
@@ -176,21 +176,18 @@
         const TYPE_QUANTITY = 1;
         const TYPE_SEPARATED = 2; // Cá
 
+        // [QUAN TRỌNG] Lấy ID khách hàng từ biến Server trả về
+        const LOGGED_IN_CUSTOMER_ID = @currentCustomerId;
+
         let products = [];
         let cart = [];
         let currentProduct = null;
         let selectedOption = ""; // Biến tạm lưu lựa chọn Gỏi/Nướng
 
         $(document).ready(() => {
-            loadCustomers();
+            // Không cần loadCustomers() nữa
             loadProducts();
         });
-
-        function loadCustomers() {
-            $.get('/api/Customers', data => {
-                $('#customerSelect').html(data.map(c => `<option value="${c.id}">${c.name}</option>`).join(''));
-            });
-        }
 
         function loadProducts() {
             $.get('/api/Products', data => {
@@ -231,9 +228,8 @@
             $('#groupQuantity, #groupWeight, #groupOptions, #groupNote').addClass('d-none');
             selectedOption = ""; // Reset lựa chọn
 
-            // 1. LOGIC CHẾ BIẾN (Quan trọng)
+            // 1. LOGIC CHẾ BIẾN
             if (currentProduct.preparation) {
-                // CASE: HÀU (Có data "Gỏi,Nướng") -> Hiện Buttons
                 let opts = currentProduct.preparation.split(',');
                 let btnHtml = opts.map(o =>
                     `<div class="option-btn" onclick="selectOption(this, '${o.trim()}')">${o.trim()}</div>`
@@ -243,48 +239,39 @@
                 $('#groupOptions').removeClass('d-none');
 
             } else if (currentProduct.saleType === TYPE_SEPARATED) {
-                // CASE: CÁ (SaleType = 2) -> Hiện ô nhập tay
                 $('#groupNote').removeClass('d-none');
                 setTimeout(() => $('#inputNote').focus(), 500);
             }
 
             // 2. LOGIC NHẬP SỐ LIỆU
             if (currentProduct.saleType === TYPE_QUANTITY) {
-                // CUA
                 $('#groupQuantity').removeClass('d-none');
-                if(!currentProduct.saleType === TYPE_SEPARATED) setTimeout(() => $('#inputQty').focus(), 500);
+                if(!currentProduct.preparation) setTimeout(() => $('#inputQty').focus(), 500);
             } else if (currentProduct.saleType === TYPE_SEPARATED) {
-                // CÁ
                 $('#labelWeight').text('Ước lượng (Kg / con)');
                 $('#groupWeight').removeClass('d-none');
             } else {
-                // HÀU, NGAO
                 $('#labelWeight').text('Khối lượng (Kg)');
                 $('#groupWeight').removeClass('d-none');
-                // Nếu là Hàu (có Options) thì ko focus input ngay, để khách chọn món trước
                 if(!currentProduct.preparation) setTimeout(() => $('#inputWeight').focus(), 500);
             }
 
             new bootstrap.Modal('#inputModal').show();
         }
 
-        // Hàm xử lý khi bấm nút chọn Gỏi/Nướng
         function selectOption(el, val) {
-            $('.option-btn').removeClass('active'); // Bỏ chọn hết
-            $(el).addClass('active'); // Active nút vừa bấm
-            selectedOption = val; // Lưu giá trị
-            $('#inputWeight').focus(); // Chọn xong tự focus vào ô cân
+            $('.option-btn').removeClass('active');
+            $(el).addClass('active');
+            selectedOption = val;
+            $('#inputWeight').focus();
         }
 
         function addToCart() {
             let p = currentProduct;
             let qty = parseInt($('#inputQty').val()) || 0;
             let weight = parseFloat($('#inputWeight').val()) || 0;
-
-            // Lấy ghi chú: Ưu tiên nút chọn, nếu ko có thì lấy ô nhập tay
             let finalNote = selectedOption ? selectedOption : $('#inputNote').val();
 
-            // Validate chọn món (Cho Hàu)
             if (p.preparation && !selectedOption) {
                 alert(`Vui lòng chọn kiểu làm: ${p.preparation}`);
                 return;
@@ -301,7 +288,6 @@
                 quantity: 0, weight: 0, total: 0
             };
 
-            // Logic tính toán
             if (p.saleType === TYPE_QUANTITY) {
                 if (qty <= 0) return alert('Nhập số con!');
                 newItem.quantity = qty;
@@ -317,11 +303,9 @@
                 newItem.total = weight * p.defaultPrice;
             }
 
-            // Logic Thêm giỏ
             if (p.saleType === TYPE_SEPARATED) {
-                cart.push(newItem); // Cá -> Luôn thêm dòng mới
+                cart.push(newItem);
             } else {
-                // Hàu/Ngao -> Gộp nếu cùng ID và cùng kiểu làm (Gỏi gộp Gỏi, Nướng gộp Nướng)
                 let exist = cart.find(x => x.productId === p.id && x.note === newItem.note);
                 if (exist) {
                     exist.quantity += newItem.quantity;
@@ -348,9 +332,7 @@
             if (cart.length === 0) html = '<div class="text-center py-5 text-muted">Giỏ hàng trống</div>';
             else {
                 cart.forEach((item, idx) => {
-                    // Badge hiển thị kiểu làm/ghi chú
                     let noteHtml = item.note ? `<div class="mt-1"><span class="badge bg-info text-dark border border-info-subtle"><i class="bi bi-pencil-fill me-1"></i>${item.note}</span></div>` : '';
-
                     let desc = '';
                     let priceDisplay = '';
 
@@ -390,8 +372,16 @@
 
         function submitOrder() {
             if (cart.length === 0) return;
+
+            // [QUAN TRỌNG] Kiểm tra nếu ID = 0 (lỗi Session)
+            if (LOGGED_IN_CUSTOMER_ID === 0) {
+                alert("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!");
+                window.location.href = "/Account/Login";
+                return;
+            }
+
             let payload = {
-                customerId: $('#customerSelect').val(),
+                customerId: LOGGED_IN_CUSTOMER_ID, // Dùng ID tự động
                 items: cart.map(i => ({
                     productId: i.productId,
                     quantity: i.quantity,
@@ -400,6 +390,7 @@
                     note: i.note
                 }))
             };
+
             $.ajax({
                 url: '/api/Orders', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
                 success: () => { alert('✅ Đã gửi yêu cầu thành công!'); location.reload(); },

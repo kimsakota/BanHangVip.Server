@@ -1,0 +1,120 @@
+﻿@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+@{
+    ViewData["Title"] = "Đơn Đang Đợi";
+    // Lấy ID khách hàng từ Session
+    var currentCustomerId = HttpContextAccessor.HttpContext.Session.GetInt32("CustomerId") ?? 0;
+}
+
+<div class="container py-3">
+    <div class="mb-4">
+        <h5 class="fw-bold mb-0">⏳ Đơn Hàng Đang Đợi</h5>
+        <small class="text-muted">Các món bếp đang chuẩn bị cho bạn</small>
+    </div>
+
+    <div id="pendingList" class="row g-3">
+        <div class="col-12 text-center py-5 text-muted">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <div>Đang tải dữ liệu...</div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Lấy ID từ Server render ra
+        const MY_CUSTOMER_ID = @currentCustomerId;
+
+        $(document).ready(() => {
+            loadPendingOrders();
+        });
+
+        function loadPendingOrders() {
+            // Gọi API với tham số customerId
+            $.get(`/api/Orders/Pending?customerId=${MY_CUSTOMER_ID}`, function(data) {
+                renderList(data);
+            }).fail(function() {
+                $('#pendingList').html('<div class="col-12 text-center text-danger">Lỗi kết nối server!</div>');
+            });
+        }
+
+        function renderList(orders) {
+            if (!orders || orders.length === 0) {
+                $('#pendingList').html(`
+                    <div class="col-12 text-center text-muted py-5">
+                        <i class="fa-solid fa-mug-hot fa-3x mb-3 text-secondary opacity-25"></i>
+                        <p>Hiện không có đơn nào đang chờ.</p>
+                        <a href="/" class="btn btn-sm btn-outline-primary rounded-pill">Tạo đơn ngay</a>
+                    </div>
+                `);
+                return;
+            }
+
+            let html = orders.map(o => {
+                // 1. Tính tổng tiền đơn hàng
+                let totalMoney = 0;
+                let itemsHtml = o.items.map(i => {
+                    // Logic tính tiền từng món
+                    let itemTotal = 0;
+                    let itemDesc = "";
+
+                    // Nếu có cân nặng và giá -> tính theo cân
+                    if (i.weight > 0 && i.price > 0) {
+                        itemTotal = i.weight * i.price;
+                        itemDesc = `(${i.weight} kg)`;
+                    }
+                    // Nếu không có cân, thử tính theo số lượng (nếu logic của bạn lưu giá vào price)
+                    // Lưu ý: Dựa vào OrderItem model của bạn: Total => Weight * Price.
+                    // Nếu bán theo con (SaleType=1) mà Weight=0 thì Total=0 (Chờ cân/Chờ giá)
+
+                    totalMoney += itemTotal;
+
+                    // Ghi chú món (nếu có tách dòng hoặc ghi chú riêng)
+                    // Ở đây hiển thị đơn giản: Tên món + (số lượng/cân)
+                    return `<div class="d-flex justify-content-between small mb-1">
+                                <span>- ${i.productName} ${itemDesc}</span>
+                                <span class="fw-bold">${itemTotal > 0 ? formatMoney(itemTotal) : ''}</span>
+                            </div>`;
+                }).join('');
+
+                // 2. Format thời gian
+                let timeStr = new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+                // 3. Trạng thái hiển thị
+                let statusText = o.status === 0 ? "Đang chờ" : "Đã xong";
+
+                return `
+                <div class="col-12 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                                <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2 rounded-pill">#${o.id}</span>
+                                <small class="text-muted fw-bold"><i class="fa-regular fa-clock me-1"></i>${timeStr}</small>
+                            </div>
+
+                            <div class="mb-3 text-dark">
+                                ${itemsHtml}
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center pt-2 border-top border-light mt-auto">
+                                <div class="text-warning fw-bold small">
+                                    <i class="fa-solid fa-fire-burner me-1"></i> ${statusText}
+                                </div>
+                                <div class="text-primary fw-bold fs-5">
+                                    ${totalMoney > 0 ? formatMoney(totalMoney) : '<span class="text-muted small">Chờ cập nhật giá</span>'}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            $('#pendingList').html(html);
+        }
+
+        function formatMoney(amount) {
+            return amount.toLocaleString('vi-VN') + ' ₫';
+        }
+    </script>
+}

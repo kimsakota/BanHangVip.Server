@@ -44,13 +44,27 @@ namespace BanHangVip.Server.Controllers.API
         }
 
         // GET: api/Orders/Pending
+        // 1. App Người bán gọi: /api/Orders/Pending (Không truyền gì -> customerId = null -> Lấy HẾT)
+        // 2. Web Khách hàng gọi: /api/Orders/Pending?customerId=5 (Có truyền -> Lấy riêng khách số 5)
         [HttpGet("Pending")]
-        public async Task<ActionResult<IEnumerable<Order>>> GetPendingOrders()
+        public async Task<ActionResult<IEnumerable<Order>>> GetPendingOrders([FromQuery] int? customerId)
         {
-            return await _context.Orders
+            // Bước 1: Khởi tạo query bao gồm đầy đủ thông tin món và khách
+            var query = _context.Orders
                 .Include(o => o.Items)
-                .Include(o => o.Customer)
-                .Where(o => o.Status == OrderStatus.Pending)
+                .Include(o => o.Customer) // Quan trọng: App người bán cần cái này để biết ai đặt
+                .Where(o => o.Status == OrderStatus.Pending);
+
+            // Bước 2: Kiểm tra logic
+            // Nếu có customerId (Khách hàng đang xem) -> Chỉ lọc đơn của họ
+            if (customerId.HasValue && customerId.Value > 0)
+            {
+                query = query.Where(o => o.CustomerId == customerId.Value);
+            }
+            // Nếu customerId = null (App người bán) -> Bỏ qua dòng trên, nghĩa là LẤY TẤT CẢ
+
+            // Bước 3: Trả về kết quả (Mới nhất lên đầu)
+            return await query
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
         }

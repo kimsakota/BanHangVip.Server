@@ -15,6 +15,9 @@ namespace BanHangVip.Backend.Models
 
         public string? Avatar { get; set; }
 
+        [StringLength(4)]
+        public string? PinCode { get; set; }
+
         [JsonIgnore]
         public List<Order> Orders { get; set; } = new();
     }
