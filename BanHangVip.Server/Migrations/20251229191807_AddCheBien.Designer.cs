@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BanHangVip.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251229050457_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20251229191807_AddCheBien")]
+    partial class AddCheBien
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -158,6 +158,12 @@ namespace BanHangVip.Server.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Preparation")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("SaleType")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 

@@ -55,15 +55,21 @@ namespace BanHangVip.Server.Controllers.API
                 .ToListAsync();
         }
 
-        // GET: api/Orders/Delivered
+        // GET: api/Orders/Delivered?page=1&pageSize=20
         [HttpGet("Delivered")]
-        public async Task<ActionResult<IEnumerable<Order>>> GetDeliveredOrders()
+        public async Task<ActionResult<IEnumerable<Order>>> GetDeliveredOrders(int page = 1, int pageSize = 20)
         {
+            // Đảm bảo page không nhỏ hơn 1
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 20;
+
             return await _context.Orders
                 .Include(o => o.Items)
                 .Include(o => o.Customer)
                 .Where(o => o.Status == OrderStatus.Delivered)
-                .OrderByDescending(o => o.CreatedAt)
+                .OrderByDescending(o => o.CreatedAt) // Sắp xếp mới nhất lên đầu TRƯỚC khi cắt trang
+                .Skip((page - 1) * pageSize)         // Bỏ qua các đơn hàng của trang trước
+                .Take(pageSize)                      // Lấy số lượng đơn hàng giới hạn (20)
                 .ToListAsync();
         }
 

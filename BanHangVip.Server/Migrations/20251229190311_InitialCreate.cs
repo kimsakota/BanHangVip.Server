@@ -34,7 +34,8 @@ namespace BanHangVip.Server.Migrations
                         .Annotation("SqlServer:Identity", "1, 1"),
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Icon = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    DefaultPrice = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
+                    DefaultPrice = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    SaleType = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {

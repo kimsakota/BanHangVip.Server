@@ -1,8 +1,412 @@
 ﻿@{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Đặt Hàng Hải Sản";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<style>
+    body {
+        background-color: #f0f2f5;
+        padding-bottom: 120px;
+    }
+
+    /* Card sản phẩm */
+    .product-card {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        background: white;
+        height: 100%;
+        transition: transform 0.2s;
+        cursor: pointer;
+    }
+
+        .product-card:active {
+            transform: scale(0.95);
+        }
+
+    .product-icon {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .price-tag {
+        color: #d63384;
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+
+    .big-input {
+        font-size: 2rem;
+        text-align: center;
+        border-radius: 12px;
+        font-weight: bold;
+    }
+
+    /* Style cho Nút lựa chọn (Gỏi/Nướng) */
+    .option-group {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .option-btn {
+        flex: 1;
+        padding: 10px;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        background: white;
+        color: #6c757d;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .option-btn.active {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+            color: #0d6efd;
+        }
+
+    /* Badge số lượng */
+    .badge-qty {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: #ff4757;
+        color: white;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        font-weight: bold;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .cart-item {
+        border-bottom: 1px dashed #eee;
+        padding: 10px 0;
+    }
+</style>
+
+<div class="container py-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="fw-bold mb-0">Tạo Đơn Yêu Cầu</h5>
+            <small class="text-muted">Chọn khách & món ăn</small>
+        </div>
+        <select id="customerSelect" class="form-select w-auto fw-bold border-0 bg-white shadow-sm" style="border-radius: 20px;">
+            <option value="">Đang tải...</option>
+        </select>
+    </div>
+
+    <div id="productList" class="row row-cols-2 row-cols-md-4 g-3"></div>
 </div>
+
+<div class="fixed-bottom bg-white shadow p-3 border-top" style="border-radius: 20px 20px 0 0;">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <small class="text-muted d-block">Dự kiến thanh toán</small>
+            <h4 class="mb-0 fw-bold text-primary" id="barTotal">0 ₫</h4>
+        </div>
+        <button class="btn btn-dark rounded-pill px-4 py-2 fw-bold shadow-sm" onclick="showCart()">
+            Giỏ Hàng <span class="badge bg-danger ms-2 rounded-pill" id="cartCount">0</span>
+        </button>
+    </div>
+</div>
+
+<div class="modal fade" id="inputModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow" style="border-radius: 20px;">
+            <div class="modal-body text-center p-4">
+                <div id="modalIcon" style="font-size: 4rem;">🦀</div>
+                <h5 class="fw-bold mb-1" id="modalName">Tên Món</h5>
+
+                <div id="groupOptions" class="mt-3 d-none">
+                    <label class="small fw-bold text-muted mb-2">Chọn kiểu làm</label>
+                    <div class="option-group" id="optionButtonsArea">
+                    </div>
+                </div>
+
+                <div id="groupNote" class="mt-3 d-none text-start">
+                    <label class="small fw-bold text-muted mb-1">Ghi chú chế biến</label>
+                    <textarea id="inputNote" class="form-control bg-light border-0 fw-bold" rows="2" placeholder="Ví dụ: Hấp xì dầu, nấu chua..."></textarea>
+                </div>
+
+                <hr class="my-3 opacity-25">
+
+                <div id="groupQuantity" class="mb-3 d-none">
+                    <label class="small fw-bold text-muted mb-1">Số lượng (Con)</label>
+                    <input type="number" id="inputQty" class="form-control big-input" placeholder="0">
+                </div>
+
+                <div id="groupWeight" class="mb-3 d-none">
+                    <label class="small fw-bold text-muted mb-1" id="labelWeight">Cân nặng (Kg)</label>
+                    <input type="number" id="inputWeight" class="form-control big-input" step="0.1" placeholder="0.0">
+                </div>
+
+                <button class="btn btn-primary w-100 rounded-pill py-2 fw-bold mt-2" onclick="addToCart()">
+                    Xác nhận
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-bottom h-75 rounded-top-4" id="cartOffcanvas">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title fw-bold">Xác nhận yêu cầu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column bg-light">
+        <div id="cartList" class="bg-white rounded-4 p-3 shadow-sm mb-3 overflow-auto flex-grow-1"></div>
+        <div class="mt-auto">
+            <button class="btn btn-success w-100 py-3 rounded-pill fw-bold shadow" onclick="submitOrder()">
+                🚀 GỬI YÊU CẦU
+            </button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const TYPE_WEIGHT = 0;
+        const TYPE_QUANTITY = 1;
+        const TYPE_SEPARATED = 2; // Cá
+
+        let products = [];
+        let cart = [];
+        let currentProduct = null;
+        let selectedOption = ""; // Biến tạm lưu lựa chọn Gỏi/Nướng
+
+        $(document).ready(() => {
+            loadCustomers();
+            loadProducts();
+        });
+
+        function loadCustomers() {
+            $.get('/api/Customers', data => {
+                $('#customerSelect').html(data.map(c => `<option value="${c.id}">${c.name}</option>`).join(''));
+            });
+        }
+
+        function loadProducts() {
+            $.get('/api/Products', data => {
+                products = data;
+                renderGrid();
+            });
+        }
+
+        function renderGrid() {
+            let html = products.map(p => `
+                <div class="col">
+                    <div class="product-card text-center p-3 position-relative" onclick="openModal(${p.id})">
+                        ${getBadge(p.id)}
+                        <div class="product-icon">${p.icon}</div>
+                        <h6 class="fw-bold mb-1 text-truncate">${p.name}</h6>
+                        <div class="price-tag">${formatPrice(p.defaultPrice)}</div>
+                    </div>
+                </div>
+            `).join('');
+            $('#productList').html(html);
+        }
+
+        function getBadge(pid) {
+            let count = cart.filter(x => x.productId === pid).length;
+            return count > 0 ? `<div class="badge-qty">${count}</div>` : '';
+        }
+
+        // --- OPEN MODAL ---
+        function openModal(pid) {
+            currentProduct = products.find(p => p.id === pid);
+            $('#modalName').text(currentProduct.name);
+            $('#modalIcon').html(currentProduct.icon);
+
+            // Reset Inputs
+            $('#inputQty').val('');
+            $('#inputWeight').val('');
+            $('#inputNote').val('');
+            $('#groupQuantity, #groupWeight, #groupOptions, #groupNote').addClass('d-none');
+            selectedOption = ""; // Reset lựa chọn
+
+            // 1. LOGIC CHẾ BIẾN (Quan trọng)
+            if (currentProduct.preparation) {
+                // CASE: HÀU (Có data "Gỏi,Nướng") -> Hiện Buttons
+                let opts = currentProduct.preparation.split(',');
+                let btnHtml = opts.map(o =>
+                    `<div class="option-btn" onclick="selectOption(this, '${o.trim()}')">${o.trim()}</div>`
+                ).join('');
+
+                $('#optionButtonsArea').html(btnHtml);
+                $('#groupOptions').removeClass('d-none');
+
+            } else if (currentProduct.saleType === TYPE_SEPARATED) {
+                // CASE: CÁ (SaleType = 2) -> Hiện ô nhập tay
+                $('#groupNote').removeClass('d-none');
+                setTimeout(() => $('#inputNote').focus(), 500);
+            }
+
+            // 2. LOGIC NHẬP SỐ LIỆU
+            if (currentProduct.saleType === TYPE_QUANTITY) {
+                // CUA
+                $('#groupQuantity').removeClass('d-none');
+                if(!currentProduct.saleType === TYPE_SEPARATED) setTimeout(() => $('#inputQty').focus(), 500);
+            } else if (currentProduct.saleType === TYPE_SEPARATED) {
+                // CÁ
+                $('#labelWeight').text('Ước lượng (Kg / con)');
+                $('#groupWeight').removeClass('d-none');
+            } else {
+                // HÀU, NGAO
+                $('#labelWeight').text('Khối lượng (Kg)');
+                $('#groupWeight').removeClass('d-none');
+                // Nếu là Hàu (có Options) thì ko focus input ngay, để khách chọn món trước
+                if(!currentProduct.preparation) setTimeout(() => $('#inputWeight').focus(), 500);
+            }
+
+            new bootstrap.Modal('#inputModal').show();
+        }
+
+        // Hàm xử lý khi bấm nút chọn Gỏi/Nướng
+        function selectOption(el, val) {
+            $('.option-btn').removeClass('active'); // Bỏ chọn hết
+            $(el).addClass('active'); // Active nút vừa bấm
+            selectedOption = val; // Lưu giá trị
+            $('#inputWeight').focus(); // Chọn xong tự focus vào ô cân
+        }
+
+        function addToCart() {
+            let p = currentProduct;
+            let qty = parseInt($('#inputQty').val()) || 0;
+            let weight = parseFloat($('#inputWeight').val()) || 0;
+
+            // Lấy ghi chú: Ưu tiên nút chọn, nếu ko có thì lấy ô nhập tay
+            let finalNote = selectedOption ? selectedOption : $('#inputNote').val();
+
+            // Validate chọn món (Cho Hàu)
+            if (p.preparation && !selectedOption) {
+                alert(`Vui lòng chọn kiểu làm: ${p.preparation}`);
+                return;
+            }
+
+            let newItem = {
+                tempId: Date.now(),
+                productId: p.id,
+                productName: p.name,
+                icon: p.icon,
+                price: p.defaultPrice,
+                saleType: p.saleType,
+                note: finalNote,
+                quantity: 0, weight: 0, total: 0
+            };
+
+            // Logic tính toán
+            if (p.saleType === TYPE_QUANTITY) {
+                if (qty <= 0) return alert('Nhập số con!');
+                newItem.quantity = qty;
+            } else if (p.saleType === TYPE_SEPARATED) {
+                if (weight <= 0) return alert('Nhập cân nặng ước lượng!');
+                newItem.quantity = 1;
+                newItem.weight = weight;
+                newItem.total = weight * p.defaultPrice;
+            } else {
+                if (weight <= 0) return alert('Nhập số Kg!');
+                newItem.quantity = 1;
+                newItem.weight = weight;
+                newItem.total = weight * p.defaultPrice;
+            }
+
+            // Logic Thêm giỏ
+            if (p.saleType === TYPE_SEPARATED) {
+                cart.push(newItem); // Cá -> Luôn thêm dòng mới
+            } else {
+                // Hàu/Ngao -> Gộp nếu cùng ID và cùng kiểu làm (Gỏi gộp Gỏi, Nướng gộp Nướng)
+                let exist = cart.find(x => x.productId === p.id && x.note === newItem.note);
+                if (exist) {
+                    exist.quantity += newItem.quantity;
+                    exist.weight += newItem.weight;
+                    exist.total += newItem.total;
+                } else {
+                    cart.push(newItem);
+                }
+            }
+
+            updateUI();
+            bootstrap.Modal.getInstance('#inputModal').hide();
+        }
+
+        function updateUI() {
+            $('#cartCount').text(cart.length);
+            renderGrid();
+            let total = cart.reduce((sum, item) => sum + item.total, 0);
+            $('#barTotal').text(formatPrice(total));
+        }
+
+        function showCart() {
+            let html = '';
+            if (cart.length === 0) html = '<div class="text-center py-5 text-muted">Giỏ hàng trống</div>';
+            else {
+                cart.forEach((item, idx) => {
+                    // Badge hiển thị kiểu làm/ghi chú
+                    let noteHtml = item.note ? `<div class="mt-1"><span class="badge bg-info text-dark border border-info-subtle"><i class="bi bi-pencil-fill me-1"></i>${item.note}</span></div>` : '';
+
+                    let desc = '';
+                    let priceDisplay = '';
+
+                    if (item.saleType === TYPE_QUANTITY) {
+                        desc = `<span class="badge bg-warning text-dark">Chờ cân</span> <b>${item.quantity}</b> con`;
+                        priceDisplay = `<small class="text-muted">Chờ giá</small>`;
+                    } else if (item.saleType === TYPE_SEPARATED) {
+                        desc = `1 con &bull; ~${item.weight} kg`;
+                        priceDisplay = formatPrice(item.total);
+                    } else {
+                        desc = `<b>${item.weight}</b> kg`;
+                        priceDisplay = formatPrice(item.total);
+                    }
+
+                    html += `
+                    <div class="cart-item d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-start">
+                            <span class="fs-1 me-3 lh-1">${item.icon}</span>
+                            <div>
+                                <h6 class="fw-bold mb-0">${item.productName}</h6>
+                                <div class="text-muted small">${desc}</div>
+                                ${noteHtml}
+                            </div>
+                        </div>
+                        <div class="text-end ms-2">
+                            <div class="fw-bold text-primary">${priceDisplay}</div>
+                            <button class="btn btn-link text-danger text-decoration-none p-0 small" onclick="remove(${idx})">Xóa</button>
+                        </div>
+                    </div>`;
+                });
+            }
+            $('#cartList').html(html);
+            new bootstrap.Offcanvas('#cartOffcanvas').show();
+        }
+
+        function remove(idx) { cart.splice(idx, 1); updateUI(); showCart(); }
+
+        function submitOrder() {
+            if (cart.length === 0) return;
+            let payload = {
+                customerId: $('#customerSelect').val(),
+                items: cart.map(i => ({
+                    productId: i.productId,
+                    quantity: i.quantity,
+                    weight: i.weight,
+                    price: i.price,
+                    note: i.note
+                }))
+            };
+            $.ajax({
+                url: '/api/Orders', type: 'POST', contentType: 'application/json', data: JSON.stringify(payload),
+                success: () => { alert('✅ Đã gửi yêu cầu thành công!'); location.reload(); },
+                error: () => alert('Lỗi gửi đơn!')
+            });
+        }
+
+        function formatPrice(num) { return num.toLocaleString('vi-VN') + ' ₫'; }
+    </script>
+}
