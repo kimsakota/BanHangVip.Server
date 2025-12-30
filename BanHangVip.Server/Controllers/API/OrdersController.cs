@@ -99,13 +99,26 @@ namespace BanHangVip.Server.Controllers.API
                 .ToListAsync();
         }
 
+        // GET: api/Orders/History?customerId=5
+        [HttpGet("History")]
+        public async Task<ActionResult<IEnumerable<Order>>> GetHistory([FromQuery] int customerId)
+        {
+            var orders = await _context.Orders
+                .Include(o => o.Items)
+                .Where(o => o.CustomerId == customerId && o.Status != OrderStatus.Pending) // Lấy đơn Đã giao hoặc Đã hủy
+                .OrderByDescending(o => o.CreatedAt) // Mới nhất lên đầu
+                .ToListAsync();
+
+            return orders;
+        }
+
         // ================= CRUD =================
 
         // POST: api/Orders
         [HttpPost]
         public async Task<ActionResult<Order>> AddOrder(Order order)
         {
-            // ⭐ Kiểm tra CustomerId có tồn tại không
+            // Kiểm tra khách hàng
             var customerExists = await _context.Customers.AnyAsync(c => c.Id == order.CustomerId);
             if (!customerExists)
                 return BadRequest($"Không tìm thấy khách hàng với ID: {order.CustomerId}");
@@ -119,6 +132,21 @@ namespace BanHangVip.Server.Controllers.API
                 foreach (var item in order.Items)
                 {
                     item.OrderId = order.Id;
+
+                    // [SỬA LỖI TẠI ĐÂY] 
+                    // Tìm thông tin sản phẩm gốc trong Database để lấy tên chuẩn
+                    var product = await _context.Products.FindAsync(item.ProductId);
+                    if (product != null)
+                    {
+                        item.ProductName = product.Name; // Gán tên từ DB vào OrderItem
+
+                        // (Tùy chọn) Nếu bạn muốn lấy giá chuẩn từ DB thay vì giá Client gửi thì gán luôn:
+                        // item.Price = product.DefaultPrice; 
+                    }
+                    else
+                    {
+                        item.ProductName = "Sản phẩm không xác định";
+                    }
                 }
             }
 
@@ -200,8 +228,13 @@ namespace BanHangVip.Server.Controllers.API
                     _context.HistoryItems.Add(new HistoryItem
                     {
                         Type = "DELIVERY",
-                        ProductId = item.ProductId, // ⭐ Lưu ProductId
+                        ProductId = item.ProductId,
                         ProductName = item.ProductName,
+
+                        // [MỚI] Lưu thêm 2 trường này
+                        Quantity = item.Quantity,
+                        Note = item.Note,
+
                         Weight = item.Weight,
                         Price = item.Price,
                         Timestamp = DateTime.Now
@@ -249,8 +282,12 @@ namespace BanHangVip.Server.Controllers.API
                         _context.HistoryItems.Add(new HistoryItem
                         {
                             Type = "PAYMENT",
-                            ProductId = item.ProductId, // ⭐ Lưu ProductId
+                            ProductId = item.ProductId,
                             ProductName = item.ProductName,
+
+                            Quantity = item.Quantity,
+                            Note = item.Note,
+
                             Weight = item.Weight,
                             Price = item.Price,
                             Timestamp = paymentTime

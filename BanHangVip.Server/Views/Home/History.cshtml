@@ -1,0 +1,155 @@
+﻿@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+@{
+    ViewData["Title"] = "Lịch Sử Đơn Hàng";
+    var currentCustomerId = HttpContextAccessor.HttpContext.Session.GetInt32("CustomerId") ?? 0;
+}
+
+<div class="container py-3">
+    <div class="mb-4">
+        <h5 class="fw-bold mb-0">📜 Lịch Sử Đặt Hàng</h5>
+        <small class="text-muted">Xem lại các đơn hàng đã hoàn tất</small>
+    </div>
+
+    <div id="historyList" class="row g-3">
+        <div class="col-12 text-center py-5 text-muted">
+            <div class="spinner-border text-primary mb-2" role="status"></div>
+            <div>Đang tải dữ liệu...</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="orderDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold" id="detailId">Đơn hàng #...</h5>
+                    <small class="text-muted" id="detailDate">...</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="bg-light rounded-3 p-3 mb-3">
+                    <div id="detailItems" class="d-flex flex-column gap-3"></div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+                    <span class="text-muted fw-bold">Tổng thanh toán</span>
+                    <span class="fs-4 fw-bold text-primary" id="detailTotal">0 ₫</span>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 pt-0">
+                <button type="button" class="btn btn-light w-100 rounded-pill fw-bold" data-bs-dismiss="modal">Đóng</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const MY_CUSTOMER_ID = @currentCustomerId;
+        let allOrders = [];
+
+        $(document).ready(() => loadHistory());
+
+        function loadHistory() {
+            // Gọi API lấy lịch sử (bạn nhớ đảm bảo đã thêm API này vào OrdersController nhé)
+            $.get(`/api/Orders/History?customerId=${MY_CUSTOMER_ID}`, function(data) {
+                allOrders = data;
+                renderHistoryList(data);
+            }).fail(() => $('#historyList').html('<div class="col-12 text-center text-danger">Lỗi tải lịch sử!</div>'));
+        }
+
+        function renderHistoryList(orders) {
+            if (!orders || orders.length === 0) {
+                $('#historyList').html(`<div class="col-12 text-center text-muted py-5"><i class="fa-solid fa-clock-rotate-left fa-3x mb-3 opacity-25"></i><p>Chưa có đơn hàng nào.</p></div>`);
+                return;
+            }
+
+            let html = orders.map(o => {
+                let total = o.items.reduce((sum, i) => sum + (i.weight * i.price), 0);
+                let dateStr = new Date(o.createdAt).toLocaleDateString('vi-VN');
+                let timeStr = new Date(o.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+
+                let statusBadge = '';
+                if(o.status === 1) statusBadge = '<span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3">Đã giao</span>';
+                else if(o.status === 2) statusBadge = '<span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3">Đã hủy</span>';
+
+                if (o.isPaid) statusBadge += ' <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3 ms-1">Đã trả tiền</span>';
+                else statusBadge += ' <span class="badge bg-warning bg-opacity-10 text-dark rounded-pill px-3 ms-1">Ghi nợ</span>';
+
+                let summary = o.items.map(i => i.productName).join(', ');
+                if(summary.length > 35) summary = summary.substring(0, 35) + '...';
+
+                return `
+                <div class="col-12 col-md-6" onclick="showDetail(${o.id})" style="cursor: pointer;">
+                    <div class="card border-0 shadow-sm rounded-4 h-100 hover-effect">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold text-secondary">#${o.id}</span>
+                                <small class="text-muted">${dateStr} &bull; ${timeStr}</small>
+                            </div>
+                            <h6 class="fw-bold mb-1 text-dark">${formatMoney(total)}</h6>
+                            <div class="text-muted small mb-3 text-truncate">${summary}</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>${statusBadge}</div>
+                                <small class="text-primary fw-bold"><i class="fa-solid fa-chevron-right"></i></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+            $('#historyList').html(html);
+        }
+
+        function showDetail(orderId) {
+            let order = allOrders.find(x => x.id === orderId);
+            if (!order) return;
+
+            $('#detailId').text(`Đơn hàng #${order.id}`);
+            $('#detailDate').text(new Date(order.createdAt).toLocaleString('vi-VN'));
+
+            let itemsHtml = order.items.map(i => {
+                let itemTotal = i.weight * i.price;
+                let qtyStr = [];
+                if(i.quantity > 0) qtyStr.push(`${i.quantity} con`);
+                if(i.weight > 0) qtyStr.push(`${i.weight} kg`);
+                let noteHtml = i.note ? `<div class="text-danger small fst-italic mt-1"><i class="fa-solid fa-fire-burner me-1"></i>${i.note}</div>` : '';
+
+                return `
+                <div class="d-flex justify-content-between align-items-start border-bottom border-white pb-2 mb-2 last-no-border">
+                    <div>
+                        <div class="fw-bold text-dark">${i.productName}</div>
+                        <div class="text-muted small">${qtyStr.join(' - ')}</div>
+                        ${noteHtml}
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-dark">${formatMoney(itemTotal)}</div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">${formatMoney(i.price)}/kg</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            $('#detailItems').html(itemsHtml);
+            let total = order.items.reduce((sum, i) => sum + (i.weight * i.price), 0);
+            $('#detailTotal').text(formatMoney(total));
+            new bootstrap.Modal('#orderDetailModal').show();
+        }
+        function formatMoney(n) { return n.toLocaleString('vi-VN') + ' ₫'; }
+    </script>
+    <style>
+        .hover-effect {
+            transition: transform 0.2s;
+        }
+
+            .hover-effect:active {
+                transform: scale(0.98);
+                background-color: #f8f9fa;
+            }
+
+        .last-no-border:last-child {
+            border-bottom: none !important;
+            margin-bottom: 0 !important;
+        }
+    </style>
+}

@@ -29,6 +29,11 @@ namespace BanHangVip.Server.Controllers
             return View();
         }
 
+        public IActionResult History()
+        {
+            return View();
+        }
+
         // [QUAN TRỌNG] Hàm này dành cho trang Thống kê (nếu bạn đã thêm menu Thống kê)
         public IActionResult Statistics()
         {
