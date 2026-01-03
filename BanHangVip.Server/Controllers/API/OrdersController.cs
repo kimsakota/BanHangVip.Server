@@ -1,7 +1,9 @@
 ﻿using BanHangVip.Backend.Models;
 using BanHangVip.Server.Data;
+using BanHangVip.Server.Hubs;
 using BanHangVip.Server.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace BanHangVip.Server.Controllers.API
@@ -11,10 +13,12 @@ namespace BanHangVip.Server.Controllers.API
     public class OrdersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IHubContext<OrderHub> _hubContext;
 
-        public OrdersController(ApplicationDbContext context)
+        public OrdersController(ApplicationDbContext context, IHubContext<OrderHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         // ================= GET DATA =================
@@ -133,7 +137,6 @@ namespace BanHangVip.Server.Controllers.API
                 {
                     item.OrderId = order.Id;
 
-                    // [SỬA LỖI TẠI ĐÂY] 
                     // Tìm thông tin sản phẩm gốc trong Database để lấy tên chuẩn
                     var product = await _context.Products.FindAsync(item.ProductId);
                     if (product != null)
@@ -152,6 +155,8 @@ namespace BanHangVip.Server.Controllers.API
 
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
+
+            await _hubContext.Clients.All.SendAsync("NewOrder");
 
             // Load lại Customer để trả về đầy đủ thông tin
             await _context.Entry(order).Reference(o => o.Customer).LoadAsync();

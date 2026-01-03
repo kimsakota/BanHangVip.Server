@@ -1,4 +1,5 @@
 ﻿using BanHangVip.Server.Data;
+using BanHangVip.Server.Hubs;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,6 +11,18 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+builder.Services.AddSignalR();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        builder => builder
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .SetIsOriginAllowed((host) => true) // Cho phép mọi nguồn (App, Web...)
+            .AllowCredentials()); // Bắt buộc phải có dòng này cho SignalR
+});
 
 //Session and HttpContextAccessor
 builder.Services.AddDistributedMemoryCache();
@@ -46,6 +59,8 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseCors("AllowAll");
+
 app.UseAuthorization();
 
 app.UseSession();
@@ -56,5 +71,7 @@ app.MapControllerRoute(
 
 // 2. Map cho API Controllers (các class có attribute [ApiController])
 app.MapControllers();
+
+app.MapHub<OrderHub>("/orderHub");
 
 app.Run();
